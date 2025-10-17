@@ -3,57 +3,60 @@
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "northwind-full-stack",
-  "compatibility_date": "2025-04-04",
-  "main": "./workers/app.ts",
-  "observability": {
-    "enabled": true,
-    "logs": {
-      "invocation_logs": false,
-      "head_sampling_rate": 1
-    }
-  },
-  "placement": { "mode": "off" },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "northwind",
-      "database_id": "d5b1d127-1d3f-467e-953b-cbc69f0a9e06"
-    }
-  ]
-  /**
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "northwind-full-stack",
+	"compatibility_date": "2025-04-04",
+	"main": "./workers/app.ts",
+	"observability": {
+		"enabled": true,
+		"logs": {
+			"invocation_logs": false,
+			"head_sampling_rate": 1
+		}
+	},
+	"placement": {
+		"mode": "off"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "northwind",
+			"database_id": "5b123e08-767d-4017-94c3-66f0ed668f16"
+		},
+		{
+			"binding": "mydb1",
+			"database_name": "prod-d1-tutorial",
+			"database_id": "55598391-be7c-4c9a-af16-ff77af4bd574"
+		}
+	]
+	/**
    * Smart Placement
    * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
    */
-  // "placement": { "mode": "smart" },
-
-  /**
+	// "placement": { "mode": "smart" },
+	/**
    * Bindings
    * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
    * databases, object storage, AI inference, real-time communication and more.
    * https://developers.cloudflare.com/workers/runtime-apis/bindings/
    */
-
-  /**
+	/**
    * Environment Variables
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
    */
-  // "vars": { "MY_VARIABLE": "production_value" },
-  /**
+	// "vars": { "MY_VARIABLE": "production_value" },
+	/**
    * Note: Use secrets to store sensitive data.
    * https://developers.cloudflare.com/workers/configuration/secrets/
    */
-
-  /**
+	/**
    * Static Assets
    * https://developers.cloudflare.com/workers/static-assets/binding/
    */
-  // "assets": { "directory": "./public/", "binding": "ASSETS" },
-
-  /**
+	// "assets": { "directory": "./public/", "binding": "ASSETS" },
+	/**
    * Service Bindings (communicate between multiple Workers)
    * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
    */
-  // "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
+	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
 }
