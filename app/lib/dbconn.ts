@@ -20,6 +20,75 @@ export const sqliteCredentials = union([
     }),
 ]); */
 
+import type { TypeOf } from 'zod';
+import { any, boolean, enum as enum_, literal, object, string, union } from 'zod';
+
+import type { AnySQLiteTable } from 'drizzle-orm/sqlite-core';
+import { getTableConfig as sqliteTableConfig, SQLiteTable } from 'drizzle-orm/sqlite-core';
+
+import type { AnyColumn, AnyTable, TablesRelationalConfig  } from 'drizzle-orm';
+import type { MigrationConfig } from 'drizzle-orm/migrator';
+
+import {
+	createTableRelationsHelpers,
+	extractTablesRelationalConfig,
+	is,
+	Many,
+	normalizeRelation,
+	One,
+	Relations,
+
+} from 'drizzle-orm';
+
+import { CasingCache, toCamelCase, toSnakeCase } from 'drizzle-orm/casing';
+
+
+
+export const casingTypes = ['snake_case', 'camelCase'] as const;
+export const casingType = enum_(casingTypes);
+export type CasingType = (typeof casingTypes)[number];
+
+
+type CustomDefault = {
+	schema: string;
+	table: string;
+	column: string;
+	func: () => unknown;
+};
+
+type SchemaFile = {
+	name: string;
+	content: string;
+};
+
+export type Setup = {
+	dbHash: string;
+	dialect: 'postgresql' | 'mysql' | 'sqlite' | 'singlestore';
+	packageName:
+		| '@aws-sdk/client-rds-data'
+		| 'pglite'
+		| 'pg'
+		| 'postgres'
+		| '@vercel/postgres'
+		| '@neondatabase/serverless'
+		| 'gel'
+		| 'mysql2'
+		| '@planetscale/database'
+		| 'd1-http'
+		| '@libsql/client'
+		| 'better-sqlite3';
+	driver?: 'aws-data-api' | 'd1-http' | 'turso' | 'pglite';
+	databaseName?: string; // for planetscale (driver remove database name from connection string)
+	proxy: Proxy;
+	transactionProxy: TransactionProxy;
+	customDefaults: CustomDefault[];
+	schema: Record<string, Record<string, AnyTable<any>>>;
+	relations: Record<string, Relations>;
+	casing?: CasingType;
+	schemaFiles?: SchemaFile[];
+};
+
+
 export type ProxyParams = {
 	sql: string;
 	params?: any[];
@@ -27,7 +96,6 @@ export type ProxyParams = {
 	mode: 'array' | 'object';
 	method: 'values' | 'get' | 'all' | 'run' | 'execute';
 };
-
 
 export type Proxy = (params: ProxyParams) => Promise<any[]>;
 
@@ -69,6 +137,63 @@ export function softAssertUnreachable(x: never) {
 	return null as never;
 }
 
+export function getColumnCasing(
+	column: { keyAsName: boolean; name: string | undefined },
+	casing: CasingType | undefined,
+) {
+	if (!column.name) return '';
+	return !column.keyAsName || casing === undefined
+		? column.name
+		: casing === 'camelCase'
+		? toCamelCase(column.name)
+		: toSnakeCase(column.name);
+}
+
+
+const getCustomDefaults = <T extends AnyTable<{}>>(
+	schema: Record<string, Record<string, T>>,
+	casing?: CasingType,
+): CustomDefault[] => {
+	const customDefaults: CustomDefault[] = [];
+
+	Object.entries(schema).map(([schema, tables]) => {
+		Object.entries(tables).map(([, table]) => {
+			let tableConfig: {
+				name: string;
+				columns: AnyColumn[];
+			};
+            if (is(table, SQLiteTable)) {
+				tableConfig = sqliteTableConfig(table);
+            } else {
+                tableConfig = sqliteTableConfig(table);
+            }
+
+			// if (is(table, PgTable)) {
+			// 	//tableConfig = pgTableConfig(table);
+			// } else if (is(table, MySqlTable)) {
+			// 	//tableConfig = mysqlTableConfig(table);
+			// } else if (is(table, SQLiteTable)) {
+			// 	tableConfig = sqliteTableConfig(table);
+			// } else {
+			// 	//tableConfig = singlestoreTableConfig(table);
+			// }
+
+			tableConfig.columns.map((column) => {
+				if (column.defaultFn) {
+					customDefaults.push({
+						schema,
+						table: tableConfig.name,
+						column: getColumnCasing(column, casing),
+						func: column.defaultFn,
+					});
+				}
+			});
+		});
+	});
+
+	return customDefaults;
+};
+
 
 const prepareSqliteParams = (params: any[], driver?: string) => {
 	return params.map((param) => {
@@ -87,7 +212,7 @@ const prepareSqliteParams = (params: any[], driver?: string) => {
 				return value;
 			}
 
-			return Buffer.from(value);
+			//return Buffer.from(value);
 		}
 		return param;
 	});
@@ -259,7 +384,7 @@ export const drizzleForSQLite = async (
 	schemaFiles?: SchemaFile[],
 	casing?: CasingType,
 ): Promise<Setup> => {
-	const { connectToSQLite } = await import('../cli/connections');
+	//const { connectToSQLite } = await import('../cli/connections');
 
 	const sqliteDB = await connectToSQLite(credentials);
 	const customDefaults = getCustomDefaults(sqliteSchema, casing);

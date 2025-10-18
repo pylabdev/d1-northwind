@@ -34,7 +34,7 @@ export async function loader({context, request}: Route.LoaderArgs) {
     const page = parseInt(searchParams.get("page") as string) || 1;
     const itemsPerPage = 20;
 
-    const db = drizzle(context.cloudflare.env.DB2);
+    const db = drizzle(context.cloudflare.env.DB);
    // const db = drizzle(d1config);
 
     const result = await db.select().from(order_table).all()
