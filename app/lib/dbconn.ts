@@ -20,6 +20,10 @@ export const sqliteCredentials = union([
     }),
 ]); */
 
+import { existsSync } from 'fs';
+//import { render } from 'hanji';
+import { join, resolve } from 'path';
+
 import type { TypeOf } from 'zod';
 import { any, boolean, enum as enum_, literal, object, string, union } from 'zod';
 
@@ -44,9 +48,11 @@ import { CasingCache, toCamelCase, toSnakeCase } from 'drizzle-orm/casing';
 
 
 
+
 export const casingTypes = ['snake_case', 'camelCase'] as const;
 export const casingType = enum_(casingTypes);
 export type CasingType = (typeof casingTypes)[number];
+
 
 
 type CustomDefault = {
@@ -127,6 +133,90 @@ export type SqliteCredentials =
         url: string;
     };  
 
+export const safeRegister = async () => {
+    const { register } = await import('esbuild-register/dist/node');
+    let res: { unregister: () => void };
+    try {
+        res = register({
+            format: 'cjs',
+            loader: 'ts',
+        });
+    } catch {
+        // tsx fallback
+        res = {
+            unregister: () => {},
+        };
+    }
+
+    // has to be outside try catch to be able to run with tsx
+   // await assertES5(res.unregister);
+    return res;
+};
+
+export const dialects = ['postgresql', 'mysql', 'sqlite', 'turso', 'singlestore', 'gel'] as const;
+export const dialect = enum_(dialects);
+
+export const prefixes = [
+	'index',
+	'timestamp',
+	'supabase',
+	'unix',
+	'none',
+] as const;
+
+export const prefix = enum_(prefixes);
+export type Prefix = (typeof prefixes)[number];
+
+
+export const sqliteDriversLiterals = [
+	literal('d1-http'),
+	literal('expo'),
+	literal('durable-sqlite'),
+] as const;
+
+export const postgresqlDriversLiterals = [
+	literal('aws-data-api'),
+	literal('pglite'),
+] as const;
+
+
+// export const drivers = ['d1-http', 'expo', 'aws-data-api', 'pglite', 'durable-sqlite'] as const;
+// export type Driver = (typeof drivers)[number];
+// const _: Driver = '' as TypeOf<typeof driver>;
+
+export const sqliteDriver = union(sqliteDriversLiterals);
+export const postgresDriver = union(postgresqlDriversLiterals);
+export const driver = union([sqliteDriver, postgresDriver]);
+
+export const configMigrations = object({
+	table: string().optional(),
+	schema: string().optional(),
+	prefix: prefix.optional().default('index'),
+}).optional();
+
+export const configCommonSchema = object({
+    dialect: dialect,
+    schema: union([string(), string().array()]).optional(),
+    out: string().optional(),
+    breakpoints: boolean().optional().default(true),
+    verbose: boolean().optional().default(false),
+    driver: driver.optional(),
+    tablesFilter: union([string(), string().array()]).optional(),
+    schemaFilter: union([string(), string().array()]).default(['public']),
+    migrations: configMigrations,
+    dbCredentials: any().optional(),
+    casing: casingType.optional(),
+    sql: boolean().default(true),
+}).passthrough();
+
+export const studioConfig = object({
+	dialect,
+	schema: union([string(), string().array()]).optional(),
+	casing: casingType.optional(),
+});
+
+
+export type CliConfig = TypeOf<typeof configCommonSchema>;
 
 export function assertUnreachable(x: never | undefined): never {
 	throw new Error("Didn't expect to get here");
@@ -148,6 +238,56 @@ export function getColumnCasing(
 		? toCamelCase(column.name)
 		: toSnakeCase(column.name);
 }
+
+
+
+export const drizzleConfigFromFile = async (
+	configPath?: string,
+	isExport?: boolean,
+): Promise<CliConfig> => {
+	const prefix = process.env.TEST_CONFIG_PATH_PREFIX || '';
+
+	const defaultTsConfigExists = existsSync(resolve(join(prefix, 'drizzle.config.ts')));
+	const defaultJsConfigExists = existsSync(resolve(join(prefix, 'drizzle.config.js')));
+	const defaultJsonConfigExists = existsSync(
+		join(resolve('drizzle.config.json')),
+	);
+
+	const defaultConfigPath = defaultTsConfigExists
+		? 'drizzle.config.ts'
+		: defaultJsConfigExists
+		? 'drizzle.config.js'
+		: 'drizzle.config.json';
+
+	if (!configPath && !isExport) {
+		console.log(' no config ');
+	}
+
+	const path: string = resolve(join(prefix, configPath ?? defaultConfigPath));
+
+	if (!existsSync(path)) {
+		console.log(`${path} file does not exist`);
+		process.exit(1);
+	}
+
+
+	const { unregister } = await safeRegister();
+	const required = require(`${path}`);
+	const content = required.default ?? required;
+	unregister();
+
+	// --- get response and then check by each dialect independently
+	const res = configCommonSchema.safeParse(content);
+	if (!res.success) {
+		console.log(res.error);
+		if (!('dialect' in content)) {
+			//console.log(error("Please specify 'dialect' param in config file"));
+		}
+		process.exit(1);
+	}
+
+	return res.data;
+};
 
 
 const getCustomDefaults = <T extends AnyTable<{}>>(
@@ -369,11 +509,57 @@ export const connectToSQLite = async (
         return {};
     }
 
- 
-
 
 
     process.exit(1);
+};
+
+export const flattenDatabaseCredentials = (config: any) => {
+	if ('dbCredentials' in config) {
+		const { dbCredentials, ...rest } = config;
+		return {
+			...rest,
+			...dbCredentials,
+		};
+	}
+	return config;
+};
+
+export const prepareStudioConfig = async (options: Record<string, unknown>) => {
+
+	const config = await drizzleConfigFromFile();
+	const result = studioConfig.safeParse(config);
+
+
+	if (!('dbCredentials' in config)) {
+		//console.log(outputs.studio.noCredentials());
+		process.exit(1);
+	}
+
+	const { host, port } = options;
+	const { dialect, schema, casing } = config;
+	const flattened = flattenDatabaseCredentials(config);
+
+
+	if (dialect === 'sqlite') {
+		const parsed = flattened; // sqliteCredentials.safeParse(flattened);
+		if (!parsed.success) {
+		//	printIssuesSqlite(flattened as Record<string, unknown>, 'studio');
+			process.exit(1);
+		}
+		const credentials = flattened; //parsed.data;
+		return {
+			dialect,
+			schema,
+			host,
+			port,
+			credentials,
+			casing,
+		};
+	}
+
+
+	//assertUnreachable(dialect);
 };
 
 

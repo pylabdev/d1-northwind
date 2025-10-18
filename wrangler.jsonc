@@ -6,6 +6,11 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "northwind-full-stack",
 	"compatibility_date": "2025-04-04",
+	"compatibility_flags": [
+		"nodejs_compat"
+	  ],
+
+
 	"main": "./workers/app.ts",
 	"observability": {
 		"enabled": true,

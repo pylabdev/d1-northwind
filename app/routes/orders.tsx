@@ -5,6 +5,8 @@ import {Paginate} from "~/components";
 //import { default as d1config} from "../../drizzle.config"
 
 import {drizzle} from 'drizzle-orm/d1';
+import {prepareStudioConfig } from '../lib/dbconn';
+
 //import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
 import {Order as order_table} from '../db/schema';
 import type {Route} from "./+types/orders";
@@ -27,12 +29,26 @@ export interface Order {
 
 //
 
+
+
 export async function loader({context, request}: Route.LoaderArgs) {
     const session = context.cloudflare.env.DB.withSession("first-unconstrained");
     const {searchParams} = new URL(request.url);
     const count = true;
     const page = parseInt(searchParams.get("page") as string) || 1;
     const itemsPerPage = 20;
+
+
+    const {
+        dialect,
+        schema: schemaPath,
+        port,
+        host,
+        credentials,
+        casing,
+    } = await prepareStudioConfig({});
+    console.log('dialect is ', dialect);
+    
 
     const db = drizzle(context.cloudflare.env.DB);
    // const db = drizzle(d1config);
